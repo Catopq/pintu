@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>拼好图</title>
+    <title>智能拼图</title>
     <style>
         :root {
             --primary-color: #4CAF50;
@@ -223,8 +223,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>拼好图</h1>
-        <p class="description">请上传下载的图片，或干净的截图！</p>
+        <h1>智能拼图</h1>
+        <p class="description">上传图片自动识别类型并智能合成！</p>
         
         <div class="upload-area" id="upload-area">
             <div class="emoji">📤</div>
@@ -257,7 +257,7 @@
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>正在处理图片...</p>
+            <p>正在智能处理图片...</p>
         </div>
         
         <div class="result-section" id="result-section">
@@ -365,39 +365,76 @@
             });
         }
         
-        // 自动检测背景颜色 (true为白底，false为黑底)
-        function detectBackgroundColor(imgData) {
+        // 检测图片类型 (返回 'screenshot' 或 'solid')
+        function detectImageType(imgData) {
             const data = imgData.data;
-            let whitePixels = 0;
-            let blackPixels = 0;
-            let totalPixels = 0;
+            let edgePixels = 0;
+            let solidPixels = 0;
+            let totalEdgePixels = 0;
             
-            // 采样边缘像素来判断背景色
+            // 只检测边缘区域(5%宽度)
+            const edgeWidth = Math.max(5, Math.floor(imgData.width * 0.05));
+            
+            // 采样检测
             const sampleStep = 5;
-            const edgeWidth = Math.max(10, Math.floor(imgData.width * 0.05));
             
+            // 检测边缘区域
             for (let y = 0; y < imgData.height; y += sampleStep) {
                 for (let x = 0; x < imgData.width; x += sampleStep) {
+                    // 只检测图片边缘区域
                     if (x > edgeWidth && x < imgData.width - edgeWidth && 
                         y > edgeWidth && y < imgData.height - edgeWidth) {
                         continue;
                     }
+                    
+                    totalEdgePixels++;
                     
                     const i = (y * imgData.width + x) * 4;
                     const r = data[i];
                     const g = data[i + 1];
                     const b = data[i + 2];
                     
-                    const brightness = (r + g + b) / 3;
-                    if (brightness > 200) whitePixels++;
-                    if (brightness < 50) blackPixels++;
-                    totalPixels++;
+                    // 检测是否为纯色背景
+                    const centerX = Math.floor(imgData.width / 2);
+                    const centerY = Math.floor(imgData.height / 2);
+                    const centerI = (centerY * imgData.width + centerX) * 4;
+                    const centerR = data[centerI];
+                    const centerG = data[centerI + 1];
+                    const centerB = data[centerI + 2];
+                    
+                    const colorDiff = Math.sqrt(
+                        Math.pow(r - centerR, 2) + 
+                        Math.pow(g - centerG, 2) + 
+                        Math.pow(b - centerB, 2)
+                    );
+                    
+                    if (colorDiff < 30) { // 颜色差异很小，可能是纯色
+                        solidPixels++;
+                    }
+                    
+                    // 检测边缘变化 (截图通常有阴影或边框)
+                    if (x < edgeWidth || x > imgData.width - edgeWidth || 
+                        y < edgeWidth || y > imgData.height - edgeWidth) {
+                        const brightness = (r + g + b) / 3;
+                        if (brightness < 240 && brightness > 15) {
+                            edgePixels++;
+                        }
+                    }
                 }
             }
             
-            if (whitePixels / totalPixels > 0.6) return true;
-            if (blackPixels / totalPixels > 0.6) return false;
-            return true;
+            // 判断逻辑
+            const solidRatio = solidPixels / totalEdgePixels;
+            const edgeRatio = edgePixels / totalEdgePixels;
+            
+            if (solidRatio > 0.8) {
+                return 'solid'; // 纯色背景
+            } else if (edgeRatio > 0.3) {
+                return 'screenshot'; // 截图
+            } else {
+                // 默认按截图处理
+                return 'screenshot';
+            }
         }
         
         // 处理上传的文件
@@ -435,7 +472,7 @@
                 }
                 
                 updatePreview();
-                showStatus(`已加载 ${images.length} 张图片，正在处理...`);
+                showStatus(`已加载 ${images.length} 张图片，正在智能分析...`);
                 setTimeout(() => {
                     combineImages();
                     // 如果之前已经开启了反差色效果，则自动应用
@@ -486,17 +523,30 @@
             showStatus('已清空所有图片');
         }
         
-        // 叠加图片
+        // 智能叠加图片
         function combineImages() {
             if (images.length === 0) return;
             
-            showLoading(`正在处理 ${images.length} 张图片...`);
+            showLoading(`正在智能处理 ${images.length} 张图片...`);
             
             setTimeout(() => {
                 canvas.width = images[0].width;
                 canvas.height = images[0].height;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制第一张图片
                 ctx.drawImage(images[0], 0, 0);
+                
+                // 分析第一张图片类型
+                const tempCanvas1 = document.createElement('canvas');
+                tempCanvas1.width = images[0].width;
+                tempCanvas1.height = images[0].height;
+                const tempCtx1 = tempCanvas1.getContext('2d');
+                tempCtx1.drawImage(images[0], 0, 0);
+                const firstImageData = tempCtx1.getImageData(0, 0, tempCanvas1.width, tempCanvas1.height);
+                const firstImageType = detectImageType(firstImageData);
+                
+                showStatus(`检测到第一张图片为: ${firstImageType === 'solid' ? '纯色背景' : '截图'}`);
                 
                 for (let i = 1; i < images.length; i++) {
                     const img = images[i];
@@ -514,45 +564,57 @@
                     tempCtx.drawImage(img, 0, 0);
                     
                     const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                    const data = imageData.data;
+                    const imageType = detectImageType(imageData);
                     
-                    const isWhiteBackground = detectBackgroundColor(imageData);
-                    showStatus(`处理中 ${i + 1}/${images.length} (${isWhiteBackground ? '白底' : '黑底'})`);
+                    showStatus(`处理中 ${i + 1}/${images.length} (${imageType === 'solid' ? '纯色背景' : '截图'})`);
                     
-                    for (let j = 0; j < data.length; j += 4) {
-                        const r = data[j];
-                        const g = data[j + 1];
-                        const b = data[j + 2];
+                    if (imageType === 'solid') {
+                        // 纯色背景图片 - 使用透明叠加
+                        const data = imageData.data;
+                        const isWhiteBackground = detectBackgroundColor(imageData);
                         
-                        let isBackground = false;
-                        
-                        if (isWhiteBackground) {
-                            const whiteDistance = Math.sqrt(
-                                Math.pow(255 - r, 2) + 
-                                Math.pow(255 - g, 2) + 
-                                Math.pow(255 - b, 2)
-                            );
-                            if (whiteDistance / 441.6729559300637 <= 0.15) {
-                                isBackground = true;
+                        for (let j = 0; j < data.length; j += 4) {
+                            const r = data[j];
+                            const g = data[j + 1];
+                            const b = data[j + 2];
+                            
+                            let isBackground = false;
+                            
+                            if (isWhiteBackground) {
+                                const whiteDistance = Math.sqrt(
+                                    Math.pow(255 - r, 2) + 
+                                    Math.pow(255 - g, 2) + 
+                                    Math.pow(255 - b, 2)
+                                );
+                                if (whiteDistance / 441.6729559300637 <= 0.15) {
+                                    isBackground = true;
+                                }
+                            } else {
+                                const blackDistance = Math.sqrt(
+                                    Math.pow(r, 2) + 
+                                    Math.pow(g, 2) + 
+                                    Math.pow(b, 2)
+                                );
+                                if (blackDistance / 441.6729559300637 <= 0.15) {
+                                    isBackground = true;
+                                }
                             }
-                        } else {
-                            const blackDistance = Math.sqrt(
-                                Math.pow(r, 2) + 
-                                Math.pow(g, 2) + 
-                                Math.pow(b, 2)
-                            );
-                            if (blackDistance / 441.6729559300637 <= 0.15) {
-                                isBackground = true;
+                            
+                            if (isBackground) {
+                                data[j + 3] = 0;
                             }
                         }
                         
-                        if (isBackground) {
-                            data[j + 3] = 0;
-                        }
+                        tempCtx.putImageData(imageData, 0, 0);
+                        ctx.drawImage(tempCanvas, 0, 0);
+                    } else {
+                        // 截图 - 使用混合模式叠加
+                        ctx.globalAlpha = 0.5;
+                        ctx.globalCompositeOperation = 'multiply';
+                        ctx.drawImage(tempCanvas, 0, 0);
+                        ctx.globalAlpha = 1.0;
+                        ctx.globalCompositeOperation = 'source-over';
                     }
-                    
-                    tempCtx.putImageData(imageData, 0, 0);
-                    ctx.drawImage(tempCanvas, 0, 0);
                 }
                 
                 resultImage.src = canvas.toDataURL('image/png');
@@ -560,8 +622,43 @@
                 invertBtn.disabled = false;
                 downloadBtn.disabled = false;
                 hideLoading();
-                showStatus(`已完成 ${images.length} 张图片处理`, 'success');
+                showStatus(`已完成 ${images.length} 张图片智能合成`, 'success');
             }, 100);
+        }
+        
+        // 自动检测背景颜色 (true为白底，false为黑底)
+        function detectBackgroundColor(imgData) {
+            const data = imgData.data;
+            let whitePixels = 0;
+            let blackPixels = 0;
+            let totalPixels = 0;
+            
+            // 采样边缘像素来判断背景色
+            const sampleStep = 5;
+            const edgeWidth = Math.max(10, Math.floor(imgData.width * 0.05));
+            
+            for (let y = 0; y < imgData.height; y += sampleStep) {
+                for (let x = 0; x < imgData.width; x += sampleStep) {
+                    if (x > edgeWidth && x < imgData.width - edgeWidth && 
+                        y > edgeWidth && y < imgData.height - edgeWidth) {
+                        continue;
+                    }
+                    
+                    const i = (y * imgData.width + x) * 4;
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    
+                    const brightness = (r + g + b) / 3;
+                    if (brightness > 200) whitePixels++;
+                    if (brightness < 50) blackPixels++;
+                    totalPixels++;
+                }
+            }
+            
+            if (whitePixels / totalPixels > 0.6) return true;
+            if (blackPixels / totalPixels > 0.6) return false;
+            return true;
         }
         
         // 切换反差色效果
@@ -584,7 +681,7 @@
         // 下载结果
         function downloadResult() {
             const link = document.createElement('a');
-            link.download = `叠加结果-${new Date().toLocaleString().replace(/[\/\s:]/g, '-')}.png`;
+            link.download = `智能拼图-${new Date().toLocaleString().replace(/[\/\s:]/g, '-')}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
             showStatus('已下载结果图片', 'success');
@@ -620,4 +717,4 @@
         init();
     </script>
 </body>
-  </html>
+</html>
