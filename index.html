@@ -163,12 +163,12 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <button class="solid-btn btn-green w-100" onclick="joinGroup()">
-                               👨‍👨‍👧 加入群聊
+                               👨‍👨‍👦 加入群聊
                             </button>
                         </div>
                         <div class="col-6">
                             <button class="solid-btn btn-red w-100" onclick="showDonate()">
-                                🐭更多老鼠
+                               🐭 更多老鼠
                             </button>
                         </div>
                     </div>
@@ -180,8 +180,8 @@
     <!-- 打赏弹窗 -->
     <div class="modal-mask" id="mask"></div>
     <div class="donate-modal" id="donateBox">
-        <h4>爱你宝子</h4>
-        <p class="thank-you-text">留言QQ并加入群聊后，这边会安排人主动联系你</p>
+        <h4>爱你宝子！</h4>
+        <p class="thank-you-text">留言QQ并加入交流群，这边安排人主动联系你</p>
         <img src="https://pic1.imgdb.cn/item/682972f358cb8da5c8fa3b5f.jpg" 
              alt="打赏二维码" 
              class="donate-qrcode">
@@ -196,14 +196,17 @@ const fileInput = document.getElementById('fileUpload');
 const fileInfo = document.getElementById('fileInfo');
 let imageStack = [];
 let originalPixels = null;
-let currentPixels = null;
+let processedPixels = null; // 新增：存储处理后的像素数据
 let isInverted = false;
+let cachedCanvas = document.createElement('canvas'); // 新增：缓存画布
 
 // 初始化画布
 function initCanvas() {
     const container = document.getElementById('canvas-container');
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
+    cachedCanvas.width = canvas.width;
+    cachedCanvas.height = canvas.height;
     
     ctx.fillStyle = '#FFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -237,83 +240,102 @@ async function loadImages(files) {
     return loadedImages;
 }
 
-// 图像合成
+// 图像合成（重构版）
 function compositeImages() {
     if (imageStack.length === 0) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const tempCtx = cachedCanvas.getContext('2d');
+    tempCtx.clearRect(0, 0, cachedCanvas.width, cachedCanvas.height);
+    tempCtx.fillStyle = '#FFF';
+    tempCtx.fillRect(0, 0, cachedCanvas.width, cachedCanvas.height);
     
     const firstImage = imageStack[0];
     const scale = Math.min(
-        canvas.width / firstImage.width,
-        canvas.height / firstImage.height
+        cachedCanvas.width / firstImage.width,
+        cachedCanvas.height / firstImage.height
     );
     
     imageStack.forEach((img, index) => {
-        ctx.globalCompositeOperation = index === 0 ? 'source-over' 
+        tempCtx.globalCompositeOperation = index === 0 ? 'source-over' 
             : document.getElementById('blendMode').value;
         
-        const x = (canvas.width - img.width * scale) / 2;
-        const y = (canvas.height - img.height * scale) / 2;
+        const x = (cachedCanvas.width - img.width * scale) / 2;
+        const y = (cachedCanvas.height - img.height * scale) / 2;
         
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        tempCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
     });
     
-    originalPixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    currentPixels = originalPixels;
-    isInverted = false; // 重置反差色状态
+    // 保存原始和处理后的像素数据
+    originalPixels = tempCtx.getImageData(0, 0, cachedCanvas.width, cachedCanvas.height);
+    processedPixels = applyInvertEffect(originalPixels, isInverted);
+    
+    // 更新显示
+    updateDisplay();
 }
 
-// 反差色处理（修复版）
+// 应用反差色效果（新增函数）
+function applyInvertEffect(sourcePixels, shouldInvert) {
+    const result = ctx.createImageData(sourcePixels.width, sourcePixels.height);
+    
+    if (shouldInvert) {
+        for (let i = 0; i < sourcePixels.data.length; i += 4) {
+            result.data[i] = 255 - sourcePixels.data[i];     // R
+            result.data[i+1] = 255 - sourcePixels.data[i+1]; // G
+            result.data[i+2] = 255 - sourcePixels.data[i+2]; // B
+            result.data[i+3] = sourcePixels.data[i+3];      // Alpha
+        }
+    } else {
+        for (let i = 0; i < sourcePixels.data.length; i++) {
+            result.data[i] = sourcePixels.data[i];
+        }
+    }
+    
+    return result;
+}
+
+// 更新显示（新增函数）
+function updateDisplay() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (isInverted) {
+        ctx.putImageData(processedPixels, 0, 0);
+    } else {
+        ctx.putImageData(originalPixels, 0, 0);
+    }
+}
+
+// 反差色处理（简化版）
 function toggleInvert() {
     if (!originalPixels) {
         alert('请先上传图片');
         return;
     }
     
-    // 创建新的ImageData对象
-    const imageData = ctx.createImageData(canvas.width, canvas.height);
-    const data = imageData.data;
-    const originalData = originalPixels.data;
-    
-    if (!isInverted) {
-        // 应用反差色
-        for (let i = 0; i < data.length; i += 4) {
-            data[i] = 255 - originalData[i];     // R
-            data[i+1] = 255 - originalData[i+1]; // G
-            data[i+2] = 255 - originalData[i+2]; // B
-            data[i+3] = originalData[i+3];      // Alpha
-        }
-    } else {
-        // 恢复原始图像
-        for (let i = 0; i < data.length; i++) {
-            data[i] = originalData[i];
-        }
-    }
-    
-    // 应用处理后的图像
-    ctx.putImageData(imageData, 0, 0);
-    currentPixels = imageData;
     isInverted = !isInverted;
+    processedPixels = applyInvertEffect(originalPixels, isInverted);
+    updateDisplay();
 }
 
-// 图片导出（修复版）
+// 图片导出
 function exportImage() {
-    if (!currentPixels) {
+    if (!originalPixels) {
         alert('请先上传图片');
         return;
     }
     
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext('2d');
     
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.putImageData(currentPixels, 0, 0);
+    // 导出当前显示状态
+    if (isInverted) {
+        exportCtx.putImageData(processedPixels, 0, 0);
+    } else {
+        exportCtx.putImageData(originalPixels, 0, 0);
+    }
     
-    tempCanvas.toBlob(blob => {
+    exportCanvas.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `processed_${Date.now()}.png`;
@@ -362,7 +384,9 @@ uploadContainer.addEventListener('drop', (e) => {
 // 事件监听
 fileInput.addEventListener('change', handleFileSelect);
 document.getElementById('blendMode').addEventListener('change', () => {
-    if(imageStack.length > 0) compositeImages();
+    if(imageStack.length > 0) {
+        compositeImages();
+    }
 });
 
 // 社交功能
