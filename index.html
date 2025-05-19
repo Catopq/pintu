@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>拼好图</title>
+    <title>专业图像处理工具</title>
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet">
     <style>
         /* 上传区域优化 */
@@ -71,9 +71,12 @@
             border-radius: 8px;
             background: repeating-conic-gradient(#f8f9fa 0% 25%, #e9ecef 0% 50%) 50%/20px 20px;
             min-height: 300px;
+            overflow: auto;
+            max-height: 80vh;
         }
         #mainCanvas {
             display: block;
+            margin: 0 auto;
             max-width: 100%;
         }
 
@@ -195,14 +198,14 @@
                     </button>
                     
                     <button class="solid-btn btn-blue w-100 mb-3" onclick="exportImage()">
-                        下载图片
+                        下载原尺寸图片
                     </button>
 
                     <!-- 社交按钮行 -->
                     <div class="row g-2">
                         <div class="col-6">
                             <button class="solid-btn btn-green w-100" onclick="joinGroup()">
-                              👨‍👨‍👦 加入群聊
+                                👨‍👨‍👦 加入群聊
                             </button>
                         </div>
                         <div class="col-6">
@@ -220,7 +223,7 @@
     <div class="modal-mask" id="mask"></div>
     <div class="donate-modal" id="donateBox">
         <h4>爱你宝子</h4>
-        <p class="thank-you-text">留言QQ并加入交流群，这边派人主动联系你</p>
+        <p class="thank-you-text">留言QQ并进群</p>
         <img src="https://pic1.imgdb.cn/item/682972f358cb8da5c8fa3b5f.jpg" 
              alt="打赏二维码" 
              class="donate-qrcode">
@@ -235,20 +238,18 @@ const fileInput = document.getElementById('fileUpload');
 const fileInfo = document.getElementById('fileInfo');
 const opacitySlider = document.getElementById('opacitySlider');
 const opacityValue = document.querySelector('.opacity-value');
-let imageStack = [];
-let originalPixels = null;
-let processedPixels = null;
+let originalImages = []; // 存储原始图像对象
+let processedImages = []; // 存储处理后的图像
 let isInverted = false;
 let currentOpacity = 1.0;
-let cachedCanvas = document.createElement('canvas');
+let originalWidth = 0;
+let originalHeight = 0;
 
 // 初始化画布
 function initCanvas() {
     const container = document.getElementById('canvas-container');
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
-    cachedCanvas.width = canvas.width;
-    cachedCanvas.height = canvas.height;
     
     ctx.fillStyle = '#FFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -256,7 +257,8 @@ function initCanvas() {
 
 // 图像加载处理
 async function loadImages(files) {
-    const loadedImages = [];
+    originalImages = [];
+    processedImages = [];
     
     for (const file of files) {
         try {
@@ -267,97 +269,106 @@ async function loadImages(files) {
                 img.src = URL.createObjectURL(file);
             });
             
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            tempCanvas.getContext('2d').drawImage(img, 0, 0);
-            
-            loadedImages.push(tempCanvas);
+            originalImages.push(img);
             fileInfo.textContent = `${files.length}个文件已选择`;
+            
+            // 记录原始尺寸
+            if (originalImages.length === 1) {
+                originalWidth = img.width;
+                originalHeight = img.height;
+            }
         } catch {
             fileInfo.innerHTML = `<span style="color:red">${file.name}加载失败</span>`;
         }
     }
     
-    return loadedImages;
+    if (originalImages.length > 0) {
+        processAllImages();
+    }
 }
 
-// 图像合成（带透明度支持）
-function compositeImages() {
-    if (imageStack.length === 0) return;
-
-    const tempCtx = cachedCanvas.getContext('2d');
-    tempCtx.clearRect(0, 0, cachedCanvas.width, cachedCanvas.height);
-    tempCtx.fillStyle = '#FFF';
-    tempCtx.fillRect(0, 0, cachedCanvas.width, cachedCanvas.height);
+// 处理所有图像
+function processAllImages() {
+    processedImages = [];
     
-    const firstImage = imageStack[0];
-    const scale = Math.min(
-        cachedCanvas.width / firstImage.width,
-        cachedCanvas.height / firstImage.height
-    );
-    
-    imageStack.forEach((img, index) => {
-        tempCtx.globalCompositeOperation = index === 0 ? 'source-over' 
-            : document.getElementById('blendMode').value;
+    originalImages.forEach(img => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tempCtx = tempCanvas.getContext('2d');
         
-        const x = (cachedCanvas.width - img.width * scale) / 2;
-        const y = (cachedCanvas.height - img.height * scale) / 2;
-        
-        // 应用透明度
+        // 应用当前透明度
         tempCtx.globalAlpha = currentOpacity;
-        tempCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
-        tempCtx.globalAlpha = 1.0; // 重置透明度
+        tempCtx.drawImage(img, 0, 0);
+        tempCtx.globalAlpha = 1.0;
+        
+        processedImages.push(tempCanvas);
     });
     
-    // 保存原始和处理后的像素数据
-    originalPixels = tempCtx.getImageData(0, 0, cachedCanvas.width, cachedCanvas.height);
-    processedPixels = applyInvertEffect(originalPixels, isInverted);
-    
-    // 更新显示
     updateDisplay();
 }
 
-// 应用反差色效果
-function applyInvertEffect(sourcePixels, shouldInvert) {
-    const result = ctx.createImageData(sourcePixels.width, sourcePixels.height);
+// 更新显示（保持原始尺寸）
+function updateDisplay() {
+    if (processedImages.length === 0) return;
     
-    if (shouldInvert) {
-        for (let i = 0; i < sourcePixels.data.length; i += 4) {
-            result.data[i] = 255 - sourcePixels.data[i];     // R
-            result.data[i+1] = 255 - sourcePixels.data[i+1]; // G
-            result.data[i+2] = 255 - sourcePixels.data[i+2]; // B
-            result.data[i+3] = sourcePixels.data[i+3];      // Alpha
+    // 设置画布为原始尺寸
+    canvas.width = originalWidth;
+    canvas.height = originalHeight;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#FFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 应用混合模式
+    processedImages.forEach((img, index) => {
+        ctx.globalCompositeOperation = index === 0 ? 'source-over' 
+            : document.getElementById('blendMode').value;
+        
+        ctx.drawImage(img, 0, 0);
+    });
+    
+    // 应用反差色效果
+    if (isInverted) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = 255 - data[i];     // R
+            data[i+1] = 255 - data[i+1]; // G
+            data[i+2] = 255 - data[i+2]; // B
         }
-    } else {
-        for (let i = 0; i < sourcePixels.data.length; i++) {
-            result.data[i] = sourcePixels.data[i];
-        }
+        
+        ctx.putImageData(imageData, 0, 0);
     }
     
-    return result;
+    // 自动缩放以适应容器
+    scaleCanvasToFit();
 }
 
-// 更新显示
-function updateDisplay() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+// 自动缩放画布以适应容器
+function scaleCanvasToFit() {
+    const container = document.getElementById('canvas-container');
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
     
-    if (isInverted) {
-        ctx.putImageData(processedPixels, 0, 0);
-    } else {
-        ctx.putImageData(originalPixels, 0, 0);
-    }
+    const scale = Math.min(
+        containerWidth / originalWidth,
+        containerHeight / originalHeight
+    );
+    
+    canvas.style.width = `${originalWidth * scale}px`;
+    canvas.style.height = `${originalHeight * scale}px`;
 }
 
 // 反差色处理
 function toggleInvert() {
-    if (!originalPixels) {
+    if (processedImages.length === 0) {
         alert('请先上传图片');
         return;
     }
     
     isInverted = !isInverted;
-    processedPixels = applyInvertEffect(originalPixels, isInverted);
     updateDisplay();
 }
 
@@ -366,28 +377,49 @@ function updateOpacity() {
     currentOpacity = opacitySlider.value / 100;
     opacityValue.textContent = `${opacitySlider.value}%`;
     
-    if (imageStack.length > 0) {
-        compositeImages();
+    if (originalImages.length > 0) {
+        processAllImages();
     }
 }
 
-// 图片导出
+// 图片导出（原尺寸）
 function exportImage() {
-    if (!originalPixels) {
+    if (processedImages.length === 0) {
         alert('请先上传图片');
         return;
     }
     
+    // 创建原尺寸画布
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
+    exportCanvas.width = originalWidth;
+    exportCanvas.height = originalHeight;
     const exportCtx = exportCanvas.getContext('2d');
     
-    // 导出当前显示状态
+    // 应用所有效果
+    exportCtx.fillStyle = '#FFF';
+    exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    
+    processedImages.forEach((img, index) => {
+        exportCtx.globalCompositeOperation = index === 0 ? 'source-over' 
+            : document.getElementById('blendMode').value;
+        
+        exportCtx.globalAlpha = currentOpacity;
+        exportCtx.drawImage(img, 0, 0);
+        exportCtx.globalAlpha = 1.0;
+    });
+    
+    // 应用反差色效果
     if (isInverted) {
-        exportCtx.putImageData(processedPixels, 0, 0);
-    } else {
-        exportCtx.putImageData(originalPixels, 0, 0);
+        const imageData = exportCtx.getImageData(0, 0, exportCanvas.width, exportCanvas.height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = 255 - data[i];     // R
+            data[i+1] = 255 - data[i+1]; // G
+            data[i+2] = 255 - data[i+2]; // B
+        }
+        
+        exportCtx.putImageData(imageData, 0, 0);
     }
     
     exportCanvas.toBlob(blob => {
@@ -398,17 +430,14 @@ function exportImage() {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(a.href), 100);
-    }, 'image/png', 0.92);
+    }, 'image/png', 0.95);
 }
 
 // 文件选择处理
 async function handleFileSelect() {
     if(!fileInput.files || fileInput.files.length === 0) return;
     
-    imageStack = await loadImages(Array.from(fileInput.files));
-    if(imageStack.length > 0) {
-        compositeImages();
-    }
+    await loadImages(Array.from(fileInput.files));
 }
 
 // 拖拽上传
@@ -439,8 +468,8 @@ uploadContainer.addEventListener('drop', (e) => {
 // 事件监听
 fileInput.addEventListener('change', handleFileSelect);
 document.getElementById('blendMode').addEventListener('change', () => {
-    if(imageStack.length > 0) {
-        compositeImages();
+    if(processedImages.length > 0) {
+        updateDisplay();
     }
 });
 opacitySlider.addEventListener('input', updateOpacity);
@@ -460,14 +489,15 @@ function closeDonate() {
     document.getElementById('donateBox').style.display = 'none';
 }
 
-// 初始化
-window.addEventListener('load', initCanvas);
+// 窗口大小变化时重新缩放
 window.addEventListener('resize', () => {
-    initCanvas();
-    if(imageStack.length > 0) {
-        compositeImages();
+    if(processedImages.length > 0) {
+        scaleCanvasToFit();
     }
 });
+
+// 初始化
+initCanvas();
 </script>
 </body>
 </html>
