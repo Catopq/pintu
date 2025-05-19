@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>专业图像处理工具</title>
+    <title>拼好图</title>
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet">
     <style>
         /* 上传区域优化 */
@@ -110,6 +110,16 @@
             margin-left: 10px;
         }
 
+        /* 混合模式提示 */
+        .blend-mode-hint {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
         /* 打赏弹窗 */
         .donate-modal {
             position: fixed;
@@ -181,6 +191,9 @@
                             <option value="screen">滤色</option>
                             <option value="overlay">叠加</option>
                         </select>
+                        <div class="blend-mode-hint">
+                            💡 使用建议：黑底照片选"排除"，白底照片选"正片叠底"
+                        </div>
                     </div>
 
                     <!-- 透明度调节 -->
@@ -210,7 +223,7 @@
                         </div>
                         <div class="col-6">
                             <button class="solid-btn btn-red w-100" onclick="showDonate()">
-                               🐭 更多老鼠
+                                🐭 更多老鼠
                             </button>
                         </div>
                     </div>
@@ -222,8 +235,8 @@
     <!-- 打赏弹窗 -->
     <div class="modal-mask" id="mask"></div>
     <div class="donate-modal" id="donateBox">
-        <h4>爱你宝子</h4>
-        <p class="thank-you-text">留言QQ并进群</p>
+        <h4>感谢支持！</h4>
+        <p class="thank-you-text">谢谢你因为你温暖了四季</p>
         <img src="https://pic1.imgdb.cn/item/682972f358cb8da5c8fa3b5f.jpg" 
              alt="打赏二维码" 
              class="donate-qrcode">
@@ -443,7 +456,7 @@ async function handleFileSelect() {
 // 拖拽上传
 const uploadContainer = document.querySelector('.upload-container');
 
-uploadContainer.addEventListener('dragover', (e) => {
+uploadContainer.addEventListener('dragoover', (e) => {
     e.preventDefault();
     uploadContainer.style.borderColor = '#45a049';
     uploadContainer.style.background = 'rgba(76, 175, 80, 0.1)';
