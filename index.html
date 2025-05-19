@@ -88,7 +88,7 @@
             width: 100%;
             height: 8px;
             -webkit-appearance: none;
-            background: linear-gradient(to right, #0d6efd, #0d6efd);
+            background: linear-gradient to right, #0d6efd, #0d6efd);
             background-size: 100% 100%;
             background-repeat: no-repeat;
             border-radius: 4px;
@@ -190,9 +190,10 @@
                             <option value="exclusion">排除</option>
                             <option value="screen">滤色</option>
                             <option value="overlay">叠加</option>
+                            <option value="lighten">变亮</option>
                         </select>
                         <div class="blend-mode-hint">
-                            💡 使用建议：黑底照片选"排除"，白底照片选"正片叠底"
+                            💡 使用建议：黑底照片选"排除"，白底照片选"正片叠底"，效果不好尝试其他
                         </div>
                     </div>
 
@@ -235,8 +236,8 @@
     <!-- 打赏弹窗 -->
     <div class="modal-mask" id="mask"></div>
     <div class="donate-modal" id="donateBox">
-        <h4>感谢支持！</h4>
-        <p class="thank-you-text">谢谢你因为你温暖了四季</p>
+        <h4>感谢支持</h4>
+        <p class="thank-you-text">留言QQ并进群</p>
         <img src="https://pic1.imgdb.cn/item/682972f358cb8da5c8fa3b5f.jpg" 
              alt="打赏二维码" 
              class="donate-qrcode">
@@ -456,7 +457,7 @@ async function handleFileSelect() {
 // 拖拽上传
 const uploadContainer = document.querySelector('.upload-container');
 
-uploadContainer.addEventListener('dragoover', (e) => {
+uploadContainer.addEventListener('dragover', (e) => {
     e.preventDefault();
     uploadContainer.style.borderColor = '#45a049';
     uploadContainer.style.background = 'rgba(76, 175, 80, 0.1)';
