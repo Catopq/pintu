@@ -77,6 +77,36 @@
             max-width: 100%;
         }
 
+        /* 透明度调节器 */
+        .opacity-control {
+            margin: 20px 0;
+        }
+        .opacity-slider {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            background: linear-gradient(to right, #0d6efd, #0d6efd);
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+            outline: none;
+        }
+        .opacity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #0d6efd;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 2px rgba(0,0,0,0.2);
+        }
+        .opacity-value {
+            display: inline-block;
+            width: 40px;
+            text-align: center;
+            margin-left: 10px;
+        }
+
         /* 打赏弹窗 */
         .donate-modal {
             position: fixed;
@@ -150,6 +180,15 @@
                         </select>
                     </div>
 
+                    <!-- 透明度调节 -->
+                    <div class="opacity-control mb-3">
+                        <label class="form-label d-flex align-items-center">
+                            透明度：
+                            <input type="range" id="opacitySlider" class="opacity-slider" min="0" max="100" value="100">
+                            <span class="opacity-value">100%</span>
+                        </label>
+                    </div>
+
                     <!-- 功能按钮 -->
                     <button class="solid-btn btn-blue w-100 mb-3" onclick="toggleInvert()">
                         反差色模式
@@ -163,7 +202,7 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <button class="solid-btn btn-green w-100" onclick="joinGroup()">
-                               👨‍👨‍👦 加入群聊
+                              👨‍👨‍👦 加入群聊
                             </button>
                         </div>
                         <div class="col-6">
@@ -180,8 +219,8 @@
     <!-- 打赏弹窗 -->
     <div class="modal-mask" id="mask"></div>
     <div class="donate-modal" id="donateBox">
-        <h4>爱你宝子！</h4>
-        <p class="thank-you-text">留言QQ并加入交流群，这边安排人主动联系你</p>
+        <h4>爱你宝子</h4>
+        <p class="thank-you-text">留言QQ并加入交流群，这边派人主动联系你</p>
         <img src="https://pic1.imgdb.cn/item/682972f358cb8da5c8fa3b5f.jpg" 
              alt="打赏二维码" 
              class="donate-qrcode">
@@ -194,11 +233,14 @@ const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('fileUpload');
 const fileInfo = document.getElementById('fileInfo');
+const opacitySlider = document.getElementById('opacitySlider');
+const opacityValue = document.querySelector('.opacity-value');
 let imageStack = [];
 let originalPixels = null;
-let processedPixels = null; // 新增：存储处理后的像素数据
+let processedPixels = null;
 let isInverted = false;
-let cachedCanvas = document.createElement('canvas'); // 新增：缓存画布
+let currentOpacity = 1.0;
+let cachedCanvas = document.createElement('canvas');
 
 // 初始化画布
 function initCanvas() {
@@ -240,7 +282,7 @@ async function loadImages(files) {
     return loadedImages;
 }
 
-// 图像合成（重构版）
+// 图像合成（带透明度支持）
 function compositeImages() {
     if (imageStack.length === 0) return;
 
@@ -262,7 +304,10 @@ function compositeImages() {
         const x = (cachedCanvas.width - img.width * scale) / 2;
         const y = (cachedCanvas.height - img.height * scale) / 2;
         
+        // 应用透明度
+        tempCtx.globalAlpha = currentOpacity;
         tempCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        tempCtx.globalAlpha = 1.0; // 重置透明度
     });
     
     // 保存原始和处理后的像素数据
@@ -273,7 +318,7 @@ function compositeImages() {
     updateDisplay();
 }
 
-// 应用反差色效果（新增函数）
+// 应用反差色效果
 function applyInvertEffect(sourcePixels, shouldInvert) {
     const result = ctx.createImageData(sourcePixels.width, sourcePixels.height);
     
@@ -293,7 +338,7 @@ function applyInvertEffect(sourcePixels, shouldInvert) {
     return result;
 }
 
-// 更新显示（新增函数）
+// 更新显示
 function updateDisplay() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -304,7 +349,7 @@ function updateDisplay() {
     }
 }
 
-// 反差色处理（简化版）
+// 反差色处理
 function toggleInvert() {
     if (!originalPixels) {
         alert('请先上传图片');
@@ -314,6 +359,16 @@ function toggleInvert() {
     isInverted = !isInverted;
     processedPixels = applyInvertEffect(originalPixels, isInverted);
     updateDisplay();
+}
+
+// 透明度调节
+function updateOpacity() {
+    currentOpacity = opacitySlider.value / 100;
+    opacityValue.textContent = `${opacitySlider.value}%`;
+    
+    if (imageStack.length > 0) {
+        compositeImages();
+    }
 }
 
 // 图片导出
@@ -388,6 +443,7 @@ document.getElementById('blendMode').addEventListener('change', () => {
         compositeImages();
     }
 });
+opacitySlider.addEventListener('input', updateOpacity);
 
 // 社交功能
 function joinGroup() {
